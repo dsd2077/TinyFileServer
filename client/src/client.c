@@ -10,12 +10,9 @@ struct sockaddr_in ser_addr;
 int main(int argc,char *argv[])
 {
 
-    if (argc != 3) {
-        fprintf(stderr, "arguments error!\n");
-        fprintf(stderr, "input example: ./client ip port\n");
-        return -1;
-    }
-
+    char ip[64];
+    int port;
+    read_config(ip, &port);
     //初始化一个socket描述符，用于tcp通信
     int serverFd;
     serverFd=socket(AF_INET,SOCK_STREAM,0);
@@ -24,12 +21,12 @@ int main(int argc,char *argv[])
 
     bzero(&ser_addr,sizeof(ser_addr));
     ser_addr.sin_family=AF_INET;
-    ser_addr.sin_port=htons(atoi(argv[2]));
-    ser_addr.sin_addr.s_addr=inet_addr(argv[1]);
+    ser_addr.sin_port=htons(port);
+    ser_addr.sin_addr.s_addr=inet_addr(ip);
 
     int ret=connect(serverFd,(struct sockaddr*)&ser_addr,sizeof(ser_addr));
     ERROR_CHECK(ret,-1,"connect");
-    send(serverFd, "1", 1, 0);//'1'表示第一次连接
+    send(serverFd, "1", 1, 0);//'1'表示第一次连接               ///为什么需要这一步？
 
     char username[16] = {0};
     char * password;

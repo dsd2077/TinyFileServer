@@ -6,6 +6,7 @@ threadPool_t threadPool;
 int PORT = 10001;                   //端口
 int THREADNUM = 8;                  //线程数
 const int MAX_EVENT_NUMBER = 10000; //最大事件数
+const int CONNECTION_TIME_OUT = 30; //连接超时，单位为S
 
 
 void sigFunc(int sigNum)
@@ -37,16 +38,15 @@ int main(int argc, char *argv[])
     epoll_add(epfd,listenFd);
 
     //环形队列——用来存储已建立连接的客户端fd，以实现超时断开
-    circular_que = (pQueNode_t*)calloc(30, sizeof(pQueNode_t));//设置超时时间为30S,所以循环队列的大小为30
+    circular_que = (pQueNode_t*)calloc(CONNECTION_TIME_OUT, sizeof(pQueNode_t));//设置超时时间为30S,所以循环队列的大小为30
     curPos = 0;
 
     int curtime;//当前的时间
-    int lasttime;//上次返回的时间
+    int lasttime = time(NULL);//上次返回的时间
 
-    lasttime = time(NULL);
+    printf("server start up!\n");
     while (1) {
         int readyNum = epoll_wait(epfd, events, 10, 1000);//超时时间为1S，如果超时则返回0
-
         //未超时返回,如果并发量很高，不停的有客户连接，仍然需要将curPos加一
         if (readyNum > 0) {
             for (int i = 0; i < readyNum; ++i) {
@@ -88,6 +88,7 @@ int main(int argc, char *argv[])
                         lasttime = curtime;
                     }
                 }
+                ///TODO:为什么这里只处理了listenfd的事件？
             }//end of for
         }
         //超时返回

@@ -1,8 +1,8 @@
 #include "../include/head.h"
-// # include "../include/workque.h"
 # include "../include/threadpool.h"
+#include <stdarg.h>
 
-
+const int DEBUG = 1;
 extern char *optarg; // 引用optarg变量
 
 void parse_arg(int argc, char*argv[]){
@@ -90,4 +90,14 @@ int transFile(int new_fd)
     ret = sendfile(new_fd,fd,NULL,buf.st_size);
     ERROR_CHECK(ret,-1,"sendfile");
     return 0;
+}
+
+void Dprintf(const char* format, ...)
+{
+    if (DEBUG > 0) {
+        va_list args;
+        va_start(args, format);
+        vprintf(format, args);
+        va_end(args);
+    }
 }

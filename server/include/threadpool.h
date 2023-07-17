@@ -5,9 +5,9 @@
 # include "head.h"
 # include "workque.h"
 typedef struct {
-    int threadNum;
-    pthread_t *pthid;
-    que_t que;
+    int threadNum;      //线程数量
+    pthread_t *pthid;   //线程ID数组
+    que_t que;          //任务队列       
 }threadPool_t, *pThreadPool_t;
 
 //私有协议：小火车

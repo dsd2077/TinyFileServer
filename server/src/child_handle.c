@@ -5,6 +5,83 @@
 
 char username[16] = {0};
 
+
+int signin(int clientFd) {
+    char salt[128] = {0};
+    char query[1024] = {0};//mysql statement buf
+    char password[128] = {0};
+    printf("begain registration\n");
+
+    int ret = recv(clientFd,username,sizeof(username),0);//<register:1>
+
+    generate_salt(salt);
+
+    sprintf(query, "insert into user(username, salt) values('%s', '%s')", username, salt);
+    insert(query);
+
+    send(clientFd, salt, strlen(salt), 0);//<register:2>
+
+    recv(clientFd, password, sizeof(password), 0);//<register:3>
+
+    sprintf(query, "update user set password= '%s' where username = '%s'",password,username);
+    update(query);
+
+    //create a home directory
+    sprintf(query, "insert into VirtualFileTable(parent_id,filename,filetype,owner) values(0,'home','d','%s')", username);
+    insert(query);
+
+    sprintf(query,"%s%s%s%s%s","update user set pwd = ","'/home'"," where username = '",username,"'");
+    update(query);
+    return 0;
+}
+
+int login(int clientFd){
+    char query[1024] = {0};//mysql statement buf
+    char password[128] = {0};
+    char retval[1024] = {0};//mysql return value buf
+    char token[128] = {0};
+
+    while (1) {
+        bzero(username,sizeof(username));
+        int ret = recv(clientFd,username,sizeof(username),0);//<login:1>
+
+        bzero(query,sizeof(query));
+        bzero(retval,sizeof(retval));
+        sprintf(query,"%s%s%s","select salt,password from user where username = '",username,"'");
+        ret =Query(query,retval);
+        if(-1 == ret) {
+            send(clientFd,"-1",1,0);//<login:2>"-1"表示登陆失败
+            continue;
+        }
+        else {
+            send(clientFd,retval,11,0);//<login:2>
+        }
+        recv(clientFd,password,sizeof(password),0);//<login:3>
+
+        if (strncmp(retval+12,password,strlen(password)) == 0) {
+            send(clientFd,"1",1,0);//<login:4>send 1 on behalf of succuss
+
+            //生成token值
+            generate_salt(token);
+            //先尝试插入，如果插入失败则选择更新
+            sprintf(query, "insert into token(user, token) values('%s', '%s')", username, token);
+            ret = insert(query);
+            if (-1 == ret) {
+                sprintf(query, "update token set token = '%s' where user = '%s'",token, username);
+                ret = update(query);
+            }
+
+            bzero(retval, sizeof(retval));
+            sprintf(retval,"%s %s", username, token);
+
+            send(clientFd, retval, sizeof(retval), 0);
+            break;
+        } else {
+            send(clientFd,"0",1,0);//<login:4>send 0 on behalf of failure
+        }
+    }
+}
+
 int child_handle(pQueNode_t pNew)
 {
     int clientFd = pNew->clientFd;
@@ -26,73 +103,13 @@ int child_handle(pQueNode_t pNew)
 
     //注册
     if ('1' == msg[0]) {
-        printf("begain registration\n");
-
-        ret = recv(clientFd,username,sizeof(username),0);//<register:1>
-
-        generate_salt(salt);
-
-        sprintf(query, "insert into user(username, salt) values('%s', '%s')", username, salt);
-        insert(query);
-
-        send(clientFd, salt, strlen(salt), 0);//<register:2>
-
-        recv(clientFd, password, sizeof(password), 0);//<register:3>
-
-        sprintf(query, "update user set password= '%s' where username = '%s'",password,username);
-        update(query);
-
-        //create a home directory
-        sprintf(query, "insert into VirtualFileTable(parent_id,filename,filetype,owner) values(0,'home','d','%s')", username);
-        insert(query);
-
-        sprintf(query,"%s%s%s%s%s","update user set pwd = ","'/home'"," where username = '",username,"'");
-        update(query);
-        goto login;
+        ret = signin(clientFd);
+        login(clientFd);
     }
     //登陆
     else if ('0' == msg[0])
     {
-login:
-        while (1) {
-            bzero(username,sizeof(username));
-            ret = recv(clientFd,username,sizeof(username),0);//<login:1>
-
-            bzero(query,sizeof(query));
-            bzero(retval,sizeof(retval));
-            sprintf(query,"%s%s%s","select salt,password from user where username = '",username,"'");
-            ret =Query(query,retval);
-            if(-1 == ret) {
-                send(clientFd,"-1",1,0);//<login:2>"-1"表示登陆失败
-                continue;
-            }
-            else {
-                send(clientFd,retval,11,0);//<login:2>
-            }
-            recv(clientFd,password,sizeof(password),0);//<login:3>
-
-            if (strncmp(retval+12,password,strlen(password)) == 0) {
-                send(clientFd,"1",1,0);//<login:4>send 1 on behalf of succuss
-
-                //生成token值
-                generate_salt(token);
-                //先尝试插入，如果插入失败则选择更新
-                sprintf(query, "insert into token(user, token) values('%s', '%s')", username, token);
-                ret = insert(query);
-                if (-1 == ret) {
-                    sprintf(query, "update token set token = '%s' where user = '%s'",token, username);
-                    ret = update(query);
-                }
-
-                bzero(retval, sizeof(retval));
-                sprintf(retval,"%s %s", username, token);
-
-                send(clientFd, retval, sizeof(retval), 0);
-                break;
-            } else {
-                send(clientFd,"0",1,0);//<login:4>send 0 on behalf of failure
-            }
-        }
+        login(clientFd);
     }
     //上传下载文件的二次登陆
     else {
@@ -107,14 +124,13 @@ login:
         }
 
         strcpy(token, buf+i+1);
-
         sprintf(query,"select token from token where user = '%s'", username);
         Query(query, retval);
         if (0 == strcmp(retval, token)) {
             send(clientFd, "1", 1, 0);//给客户端发送1，代表认证成功
         }
         else {
-            send(clientFd, "0", 1, 0);//给客户端发送1，代表认证成功
+            send(clientFd, "0", 1, 0);//给客户端发送0，代表认证失败
             printf("二次登陆认证失败\n");
             return -1;
         }
@@ -146,7 +162,7 @@ login:
 
         //user's operation is been logged
         memset(query, 0, sizeof(query));
-        sprintf(query, "insert into log(user, operation) values('%s', '%s')", username, cmd);
+        snprintf(query, sizeof(query), "insert into log(user, operation) values('%s', '%s')", username, cmd);
         insert(query);
 
         if(strncmp("cd", cmd, 2) == 0)
@@ -238,8 +254,7 @@ int do_cd(int clientFd,char *cmd)
             send(clientFd,retval,strlen(retval),0);//<cd:case3>
 
         } else {//the directory exist
-            sprintf(pwd,"%s/%s",pwd,dir_name);
-
+            snprintf(pwd,sizeof(pwd), "%s/%s",pwd,dir_name);
             sprintf(query,"%s%s%s%s'","update user set pwd = '",pwd,"' where username = '",username);
             update(query);
             send(clientFd,pwd,strlen(pwd),0);//<cd:case4>

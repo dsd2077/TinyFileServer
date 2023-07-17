@@ -1,13 +1,16 @@
-### 快速运行
+## 快速运行
 - 测试环境
     - Ubuntu 22.04.2 LTS
     - MYSQL 8.0.33
 
-- 安装数据库
-    create database yourdb;
+### 服务端启动
+- 导入数据库表
+    cd TinyFileServer
+    mysql -u username -p password
+    create database yourdb;     //创建数据库  
     USE yourdb;
-    SOURCE test.sql     // 导入数据库表
-    SHOW tables;        
+    SOURCE database/test.sql    // 导入数据库表
+    SHOW tables;                //显示以下内容则导入成功       
 +----------------------+
 | VirtualFileTable     |
 | log                  |
@@ -17,11 +20,20 @@
 
 - 修改Mysql.c中数据库初始化信息
 const char* server=  "localhost";
-const char* user=    "root";
-const char* password="123";
+const char* user=    "username";
+const char* password="password";
 const char* database="yourdb";
 
+- build
+    cd server/src
+    make
 
+- 启动
+./server [-p port] [-t threadNum]
+-p，自定义端口号
+    默认9006
+-t，线程数量
+    默认为8
 
 项目采用C/S模型和线程池模型，使用tcp协议进行消息传递。
 

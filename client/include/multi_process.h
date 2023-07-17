@@ -1,34 +1,35 @@
 #include <fcntl.h> 
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
-#include<grp.h>
-#include<pwd.h>
-#include<time.h>
+#include <grp.h>
+#include <pwd.h>
+#include <time.h>
 #include <sys/mman.h>
 #include <sys/select.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include<sys/ipc.h>
-#include<sys/shm.h>
-#include<errno.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <errno.h>
 #include <sys/sem.h>
 #include <sys/msg.h>
 #include <signal.h>
-#include<pthread.h>
-#include<arpa/inet.h>
-#include<sys/socket.h>
-#include<netinet/in.h>
-#include<netdb.h>
-#include<ctype.h>
-#include<sys/epoll.h>
+#include <pthread.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <ctype.h>
+#include <sys/epoll.h>
 #include <sys/sendfile.h>
 #include <sys/mman.h>
 #include <crypt.h>
+
 
 #define ARGS_CHECK(argc,num){if(argc!=num){\
     fprintf(stderr,"参数错误！\n");\
@@ -58,6 +59,7 @@ typedef struct{
     char buf[1000];
 }train_t;
 
+void read_config(char* ip, int* port);
 int creat_child(proc_data_t *pArr,int proc_num);//creat child thread circularly
 int child_handle(int pfd);//child thread embark mission 
 int tcp_init(char *ip,char *port,int *psfd);//creat a socket and bind ip and prot,then start listening  

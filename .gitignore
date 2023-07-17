@@ -1,1 +1,3 @@
 .vscode/
+/server/src/server
+/client/src/client

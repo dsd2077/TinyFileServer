@@ -34,21 +34,26 @@ int Delete(char *query)
 
 int insert(char *query)
 {
-	MYSQL *conn;
+	MYSQL *conn = NULL;
 	int t;
 
-	conn=mysql_init(NULL);
+	conn=mysql_init(conn);
+    if (conn == NULL) {
+        printf("Error initializing MySQL connection.\n");
+        return -1;
+    }
 
 	if(!mysql_real_connect(conn,server,user,password,database,0,NULL,0))
 	{
 		printf("Error connecting to database:%s\n",mysql_error(conn));
+        return -1;
 	}
 	
 
 	t = mysql_query(conn,query);
 	if(t)
 	{
-		/* printf("Error making query:%s\n",mysql_error(conn)); */
+		printf("Error making query:%s\n",mysql_error(conn));
         return -1;
 	}
 	
@@ -113,9 +118,9 @@ int Query(char * query,char *retval)
 
 int update(char *query)
 {
-	MYSQL *conn;
+	MYSQL *conn = NULL;
 	int t;
-	conn=mysql_init(NULL);
+	conn=mysql_init(conn);
 	if(!mysql_real_connect(conn,server,user,password,database,0,NULL,0))
 	{
 		printf("Error connecting to database:%s\n",mysql_error(conn));
