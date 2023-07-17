@@ -5,23 +5,94 @@
 
 char username[16] = {0};
 
+//child_handle是子线程的如何函数
+int child_handle(pQueNode_t pNew)
+{
+    int clientFd = pNew->clientFd;
+    printf("clientFd = %d\n", clientFd);
+    int pos = pNew->pos;//当前clientfd在循环队列中的位置
 
-int signin(int clientFd) {
+    int ret = 0;
+    char msg[1024] = {0};//message buf to communicate with client
+
+    printf("receive task mission start!\n");
+
+    while(1)
+    {
+        memset(msg, 0, sizeof(msg));
+        ret = recv(clientFd, msg, sizeof(msg), 0);//接收命令本身
+        printf("clientFd = %d, msg = %s\n",clientFd, msg);
+        if (-1 == ret || 0 == ret) {        //返回0说明对端以关闭
+            return -1;
+        }
+
+        log(msg);
+
+        char *cmd = strtok(msg, " ");
+
+        if(strncmp("cd", cmd, 2) == 0)
+        {
+            do_cd(clientFd,msg);
+        }
+        else if (strncmp("signin", cmd, 6) == 0) 
+        {
+            do_signin(clientFd, msg);
+        }
+        else if (strncmp("login", cmd, 5) == 0) {
+            do_login(clientFd, msg);
+        }
+        else if(strncmp("ls", cmd, 2) == 0)
+        {
+            do_ls(clientFd);
+        }
+        else if( strncmp("puts", cmd, 4)== 0 && '2' == msg[0])
+        {
+            do_puts(clientFd,msg);
+            break;
+        }
+        else if( strncmp("gets", cmd, 4)== 0 && '2' == msg[0] )
+        {
+            do_gets(clientFd,msg);
+            break;
+        }
+        else if(strncmp("pwd", cmd, 3) == 0) 
+        {
+            do_pwd(clientFd,username);
+        }
+        else if (strncmp("mkdir", cmd, 5) == 0 )
+        {
+            do_mkdir(clientFd,msg);
+        }
+        else if (strncmp("rm", cmd, 2) == 0)
+        {
+            do_remove(clientFd, msg);
+        }
+        else 
+        {
+            continue ;
+        }
+    }
+    printf("mission conplete\n");
+    close(clientFd);//disconnecting with client 
+
+    return 0;
+}
+
+int do_signin(int clientFd, char*msg) {
     char salt[128] = {0};
-    char query[1024] = {0};//mysql statement buf
+    char query[1024] = {0};
     char password[128] = {0};
     printf("begain registration\n");
 
-    int ret = recv(clientFd,username,sizeof(username),0);//<register:1>
 
+    char *username = strtok(msg, " ");
     generate_salt(salt);
-
     sprintf(query, "insert into user(username, salt) values('%s', '%s')", username, salt);
     insert(query);
 
-    send(clientFd, salt, strlen(salt), 0);//<register:2>
+    send(clientFd, salt, strlen(salt), 0);
 
-    recv(clientFd, password, sizeof(password), 0);//<register:3>
+    recv(clientFd, password, sizeof(password), 0);
 
     sprintf(query, "update user set password= '%s' where username = '%s'",password,username);
     update(query);
@@ -35,7 +106,7 @@ int signin(int clientFd) {
     return 0;
 }
 
-int login(int clientFd){
+int do_login(int clientFd, char* cmd){
     char query[1024] = {0};//mysql statement buf
     char password[128] = {0};
     char retval[1024] = {0};//mysql return value buf
@@ -82,129 +153,13 @@ int login(int clientFd){
     }
 }
 
-int child_handle(pQueNode_t pNew)
-{
-    int clientFd = pNew->clientFd;
-    printf("clientFd = %d\n", clientFd);
-    int pos = pNew->pos;//当前clientfd在循环队列中的位置
-    char cmd[1024] = {0};//command buffer
-    int ret = 0;
-    char password[128] = {0};
-    char salt[128] = {0};
-    char token[128] = {0};
-    char msg[1] = {0};//message buf to communicate with client
-    char query[1024] = {0};//mysql statement buf
-    char retval[1024] = {0};//mysql return value buf
-
-    printf("receive task mission start!\n");
-
-    ret = recv(clientFd, msg, sizeof(msg), 0);
-    printf("msg = %s\n", msg);
-
-    //注册
-    if ('1' == msg[0]) {
-        ret = signin(clientFd);
-        login(clientFd);
-    }
-    //登陆
-    else if ('0' == msg[0])
-    {
-        login(clientFd);
-    }
-    //上传下载文件的二次登陆
-    else {
-        printf("验证二次登陆\n");
-        char buf[1024]  = {0};
-        bzero(username, sizeof(username));
-        recv(clientFd, buf, sizeof(buf), 0);
-
-        int i;
-        for (i = 0; buf[i] != ' '; ++i) {
-            username[i] = buf[i];
-        }
-
-        strcpy(token, buf+i+1);
-        sprintf(query,"select token from token where user = '%s'", username);
-        Query(query, retval);
-        if (0 == strcmp(retval, token)) {
-            send(clientFd, "1", 1, 0);//给客户端发送1，代表认证成功
-        }
-        else {
-            send(clientFd, "0", 1, 0);//给客户端发送0，代表认证失败
-            printf("二次登陆认证失败\n");
-            return -1;
-        }
-    }
-
-    while(1)
-    {
-        /* bzero(cmd,sizeof(cmd)); */
-        memset(cmd, 0, sizeof(cmd));
-        ret = recv(clientFd, cmd, sizeof(cmd), 0);//接收命令本身
-        printf("clientFd = %d, cmd = %s\n",clientFd, cmd);
-        if (-1 == ret || 0 == ret) {
-            return -1;
-        }
-
-        if ( '2' != msg[0]) {
-            /* printf("before move pos = %d\n",pos); */
-            //找到当前clientFd在循环队列中的结点
-            pQueNode_t ptemp = circular_que[pos];
-            //将该结点挪动到curPos位置上
-            if (ptemp ) {
-                circular_que[pos] = NULL;
-                ptemp->pNext = circular_que[curPos];
-                circular_que[curPos] = ptemp;
-                pos = curPos;
-            }
-            /* printf("after move pos = %d\n",pos); */
-        }
-
-        //user's operation is been logged
-        memset(query, 0, sizeof(query));
-        snprintf(query, sizeof(query), "insert into log(user, operation) values('%s', '%s')", username, cmd);
-        insert(query);
-
-        if(strncmp("cd", cmd, 2) == 0)
-        {
-            do_cd(clientFd,cmd);
-        }
-        else if(strncmp("ls", cmd, 2) == 0)
-        {
-            do_ls(clientFd);
-        }
-        else if( strncmp("puts", cmd, 4)== 0 && '2' == msg[0])
-        {
-            do_puts(clientFd,cmd);
-            break;
-        }
-        else if( strncmp("gets", cmd, 4)== 0 && '2' == msg[0] )
-        {
-            do_gets(clientFd,cmd);
-            break;
-        }
-        else if(strncmp("pwd", cmd, 3) == 0) 
-        {
-            do_pwd(clientFd,username);
-        }
-        else if (strncmp("mkdir", cmd, 5) == 0 )
-        {
-            do_mkdir(clientFd,cmd);
-        }
-        else if (strncmp("rm", cmd, 2) == 0)
-        {
-            do_remove(clientFd, cmd);
-        }
-        else 
-        {
-            continue ;
-        }
-    }
-    printf("mission conplete\n");
-    close(clientFd);//disconnecting with client 
-
-    return 0;
+int log(const char *msg) {
+    char query[1024] = {0};
+    snprintf(query, sizeof(query), "insert into log(user, operation) values('%s', '%s')", username, msg);
+    insert(query);
 }
+
+
 int do_cd(int clientFd,char *cmd) 
 {
     char query[1024] = {0};

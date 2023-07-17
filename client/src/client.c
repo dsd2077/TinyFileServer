@@ -9,7 +9,6 @@ struct sockaddr_in ser_addr;
 
 int main(int argc,char *argv[])
 {
-
     char ip[64];
     int port;
     read_config(ip, &port);
@@ -33,24 +32,27 @@ int main(int argc,char *argv[])
     char *encryptedpd = NULL;//encrypted password
     char salt[16] = {0};
     char recv_buf[1024];
+    char input[1024] = {0};
+    char message[1024] = {0};
 
     printf("0  for log in\n"); 
     printf("1  for register\n");
-    scanf("%s",msg);
-    send(serverFd, msg, sizeof(msg), 0);
+    scanf("%s",input);
 
-    if (msg[0] == '1') {
+    if (input[0] == '1') {
+        // 如果注册失败怎么接受消息？
         printf("begain register\n");
         printf("please input username:");
-        scanf("%s",username);//before scanf,system will flush stdout antomatically
-        send(serverFd,username,strlen(username),0);//<register:1>
+        scanf("%s",input);
+        sprintf(message, "signin %s",  input);
+        send(serverFd,message,strlen(message),0);
 
-        recv(serverFd, salt, sizeof(salt),0);//<register:2>
+        recv(serverFd, salt, sizeof(salt),0);           //这里不一定接受到盐值，有可能注册失败
 
         password=getpass("please input password:");
         encryptedpd = crypt(password,salt);
 
-        send(serverFd, encryptedpd, strlen(encryptedpd), 0);//<register:3>
+        send(serverFd, encryptedpd, strlen(encryptedpd), 0);
         printf("register success!\n");
     }
 
